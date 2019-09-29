@@ -85,13 +85,13 @@ function drop_partitions_history() {
 function create_partitions_trend() {
     for PARTITIONS_CREATE_EVERY_MONTHS in $(date +"%Y%m") $(date +"%Y%m" --date='1 months') $(date +"%Y%m" --date='2 months') $(date +"%Y%m" --date='3 months') $(date +"%Y%m" --date='4 months') $(date +"%Y%m" --date='5 months')
     do
-        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_MONTHS}01 00:00:00)" +%s)
+        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_MONTHS}01 00:00:00)" +%s) #"
         for TABLE_NAME in ${TREND_TABLE}
         do
             SQL1=$(echo "show create table ${TABLE_NAME};")
             RET1=$(${MYSQL_CMD} -e "${SQL1}"|grep "PARTITION BY RANGE"|wc -l)
             if [ "${RET1}" == "0" ];then
-                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS}  VALUES LESS THAN (${TIME_PARTITIONS}));")
+                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS}  VALUES LESS THAN (${TIME_PARTITIONS}));") #"
                 RET2=$(${MYSQL_CMD} -e "${SQL2}")
                 if [ "${RET2}" != "" ];then
                     echo  ${RET2}
