@@ -20,43 +20,37 @@ function GetConf() {
 }
 
 function MySQL() {
+    echo "EXEC: $@" 1>&2
     mysql \
         -u"$(GetConf DBUser zabbix)" \
         -p"$(GetConf DBPassword)" \
         -P"$(GetConf DBPort 3306)" \
         -h"$(GetConf DBHost 127.0.0.1)" \
           "$(GetConf DBName zabbix)" \
-        -e "$@" && return
-    echo "..FAILED: $@" 1>&2
+        -e "$@"
 }
 
 function table_contains() {
-    local TABLE_NAME="$1" MASK="$2"
-    MySQL "show create table $TABLE_NAME" | grep -q "$MASK"
+    local TABLE="$1" MASK="$2"
+    MySQL "show create table $TABLE" | grep -q "$MASK"
 }
 
 function create_partition() {
-    local TABLE_NAME="$1" PARTITION_NAME="$2" TIME_PARTITIONS="$3"
+    local TABLE="$1" PART="$2" TIME="$3"
 
-    if table_contains "$TABLE_NAME" "PARTITION BY RANGE"
+    if table_contains "$TABLE" "PARTITION BY RANGE"
     then
-        table_contains "$TABLE_NAME" "p${PARTITION_NAME}" && return
-
-        printf "table %-12s create partition p${PARTITION_NAME}\n" ${TABLE_NAME}
-        MySQL "ALTER TABLE ${TABLE_NAME}  ADD PARTITION (PARTITION p${PARTITION_NAME} VALUES LESS THAN (${TIME_PARTITIONS}))"
+        table_contains "$TABLE" "p${PART}" && return
+        MySQL "ALTER TABLE $TABLE ADD PARTITION (PARTITION p${PART} VALUES LESS THAN (${TIME}))"
     else
-        printf "table %-12s create partition p${PARTITION_NAME}\n" ${TABLE_NAME}
-        MySQL "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITION_NAME}  VALUES LESS THAN (${TIME_PARTITIONS}))"
+        MySQL "ALTER TABLE $TABLE PARTITION BY RANGE( clock ) (PARTITION p${PART}  VALUES LESS THAN (${TIME}))"
     fi
 }
 
 function drop_partition() {
-    local TABLE_NAME="$1" PARTITION_NAME="$2"
-
-    table_contains "$TABLE_NAME" "p${PARTITION_NAME}" || return 0
-
-    printf "table %-12s drop partition p${PARTITION_NAME}\n" ${TABLE_NAME}
-    MySQL "ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITION_NAME}"
+    local TABLE="$1" PART="$2"
+    table_contains "$TABLE" "p${PART}" || return
+    MySQL "ALTER TABLE ${TABLE} DROP PARTITION p${PART}"
 }
 
 function create_partitions_history() {
@@ -98,4 +92,4 @@ function main() {
     drop_partitions_trend
 }
 
-#main
+main
