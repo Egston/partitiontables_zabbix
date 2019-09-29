@@ -23,6 +23,21 @@ TREND_TABLE="trends trends_uint"
 
 MYSQL_CMD=$(echo ${MYSQL_BIN} -u${ZABBIX_USER:-zabbix} -p${ZABBIX_PWD} -P${ZABBIX_PORT:-3306} -h${ZABBIX_HOST:-127.0.0.1} ${ZABBIX_DB:-zabbix})
 
+function drop_partition() {
+    local TABLE_NAME="$1" PARTITION_NAME="$2"
+
+    SQL="show create table ${TABLE_NAME}"
+    ${MYSQL_CMD} -e "${SQL}" | grep -q "p${PARTITION_NAME}" ||
+        return 0
+
+    SQL="ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITION_NAME}"
+    if ${MYSQL_CMD} -e "${SQL}"; then
+        printf "table %-12s drop partitions p${PARTITION_NAME}\n" ${TABLE_NAME}
+    else
+        echo "..FAILED: ${SQL}"
+    fi
+}
+
 function create_partitions_history() {
     for PARTITIONS_CREATE_EVERY_DAY in $(date +"%Y%m%d") $(date +"%Y%m%d" --date='1 days') $(date +"%Y%m%d" --date='2 days') $(date +"%Y%m%d" --date='3 days')  $(date +"%Y%m%d" --date='4 days') $(date +"%Y%m%d" --date='5 days') $(date +"%Y%m%d" --date='6 days') $(date +"%Y%m%d" --date='7 days')
     do
@@ -62,22 +77,9 @@ function create_partitions_history() {
 }
 
 function drop_partitions_history() {
-    for PARTITIONS_DELETE_DAYS_AGO in $(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")
-    do
-        for TABLE_NAME in ${HISTORY_TABLE}
-        do
-            SQL=$(echo -e  "show create table ${TABLE_NAME};")
-            RET=$(${MYSQL_CMD} -e "${SQL}"|grep "p${PARTITIONS_DELETE_DAYS_AGO}"|wc -l)
-            if [ "${RET}" == "1" ];then
-                SQL=$(echo "ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITIONS_DELETE_DAYS_AGO};")
-                RET=$(${MYSQL_CMD} -e "${SQL}")
-                if [ "${RET}" != "" ];then
-                    echo  ${RET}
-                    echo "${SQL}"
-                else
-                    printf "table %-12s drop partitions p${PARTITIONS_DELETE_DAYS_AGO}\n" ${TABLE_NAME}
-                fi
-            fi
+    for PARTITIONS_DELETE_DAYS_AGO in $(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago"); do
+        for TABLE_NAME in ${HISTORY_TABLE}; do
+            drop_partition "$TABLE_NAME" "$PARTITIONS_DELETE_DAYS_AGO"
         done
     done
 }
@@ -120,20 +122,9 @@ function create_partitions_trend() {
 }
 
 function drop_partitions_trend() {
-    for PARTITIONS_DELETE_MONTHS_AGO in $(date +"%Y%m" --date="${TREND_MONTHS} months ago")
-    do
-        for TABLE_NAME in ${TREND_TABLE}
-        do
-            SQL="show create table ${TABLE_NAME}"
-            ${MYSQL_CMD} -e "${SQL}" | grep -q "p${PARTITIONS_DELETE_MONTHS_AGO}" ||
-                continue
-
-            SQL="ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITIONS_DELETE_MONTHS_AGO}"
-            if ${MYSQL_CMD} -e "${SQL}"; then
-                printf "table %-12s drop partitions p${PARTITIONS_DELETE_MONTHS_AGO}\n" ${TABLE_NAME}
-            else
-                echo "..FAILED: ${SQL}"
-            fi
+    for PARTITIONS_DELETE_MONTHS_AGO in $(date +"%Y%m" --date="${TREND_MONTHS} months ago"); do
+        for TABLE_NAME in ${TREND_TABLE}; do
+            drop_partition "$TABLE_NAME" "$PARTITIONS_DELETE_MONTHS_AGO"
         done
     done
 }
