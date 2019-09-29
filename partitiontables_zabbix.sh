@@ -124,17 +124,15 @@ function drop_partitions_trend() {
     do
         for TABLE_NAME in ${TREND_TABLE}
         do
-            SQL=$(echo "show create table ${TABLE_NAME};")
-            RET=$(${MYSQL_CMD} -e "${SQL}"|grep "p${PARTITIONS_DELETE_MONTHS_AGO}"|wc -l)
-            if [ "${RET}" == "1" ];then
-                SQL=$(echo "ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITIONS_DELETE_MONTHS_AGO};")
-                RET=$(${MYSQL_CMD} -e "${SQL}")
-                if [ "${RET}" != "" ];then
-                    echo  ${RET}
-                    echo "${SQL}"
-                else
-                    printf "table %-12s drop partitions p${PARTITIONS_DELETE_MONTHS_AGO}\n" ${TABLE_NAME}
-                fi
+            SQL="show create table ${TABLE_NAME}"
+            ${MYSQL_CMD} -e "${SQL}" | grep -q "p${PARTITIONS_DELETE_MONTHS_AGO}" ||
+                continue
+
+            SQL="ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITIONS_DELETE_MONTHS_AGO}"
+            if ${MYSQL_CMD} -e "${SQL}"; then
+                printf "table %-12s drop partitions p${PARTITIONS_DELETE_MONTHS_AGO}\n" ${TABLE_NAME}
+            else
+                echo "..FAILED: ${SQL}"
             fi
         done
     done
