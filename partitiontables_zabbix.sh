@@ -7,125 +7,87 @@
 # repo: https://github.com/zabbix-book/partitiontables_zabbix
 
 ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
-ZABBIX_USER="$(awk -F= '$1 == "DBUser"     { print $2; exit }' "$ZABBIX_CONF")"
- ZABBIX_PWD="$(awk -F= '$1 == "DBPassword" { print $2; exit }' "$ZABBIX_CONF")"
-  ZABBIX_DB="$(awk -F= '$1 == "DBName"     { print $2; exit }' "$ZABBIX_CONF")"
-ZABBIX_PORT="$(awk -F= '$1 == "DBPort"     { print $2; exit }' "$ZABBIX_CONF")"
-ZABBIX_HOST="$(awk -F= '$1 == "DBHost"     { print $2; exit }' "$ZABBIX_CONF")"
-MYSQL_BIN="mysql"
 
 HISTORY_DAYS=30
-
 TREND_MONTHS=12
 
 HISTORY_TABLE="history history_log history_str history_text history_uint"
 TREND_TABLE="trends trends_uint"
 
-MYSQL_CMD=$(echo ${MYSQL_BIN} -u${ZABBIX_USER:-zabbix} -p${ZABBIX_PWD} -P${ZABBIX_PORT:-3306} -h${ZABBIX_HOST:-127.0.0.1} ${ZABBIX_DB:-zabbix})
+function GetConf() {
+    local RESULT="$(awk -F= '$1 == "'"$1"'" { print $2; exit }' "$ZABBIX_CONF")"
+    echo "${RESULT:-$2}"
+}
+
+function MySQL() {
+    mysql \
+        -u"$(GetConf DBUser zabbix)" \
+        -p"$(GetConf DBPassword)" \
+        -P"$(GetConf DBPort 3306)" \
+        -h"$(GetConf DBHost 127.0.0.1)" \
+          "$(GetConf DBName zabbix)" \
+        -e "$@" && return
+    echo "..FAILED: $@" 1>&2
+}
+
+function table_contains() {
+    local TABLE_NAME="$1" MASK="$2"
+    MySQL "show create table $TABLE_NAME" | grep -q "$MASK"
+}
+
+function create_partition() {
+    local TABLE_NAME="$1" PARTITION_NAME="$2" TIME_PARTITIONS="$3"
+
+    if table_contains "$TABLE_NAME" "PARTITION BY RANGE"
+    then
+        table_contains "$TABLE_NAME" "p${PARTITION_NAME}" && return
+
+        printf "table %-12s create partition p${PARTITION_NAME}\n" ${TABLE_NAME}
+        MySQL "ALTER TABLE ${TABLE_NAME}  ADD PARTITION (PARTITION p${PARTITION_NAME} VALUES LESS THAN (${TIME_PARTITIONS}))"
+    else
+        printf "table %-12s create partition p${PARTITION_NAME}\n" ${TABLE_NAME}
+        MySQL "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITION_NAME}  VALUES LESS THAN (${TIME_PARTITIONS}))"
+    fi
+}
 
 function drop_partition() {
     local TABLE_NAME="$1" PARTITION_NAME="$2"
 
-    SQL="show create table ${TABLE_NAME}"
-    ${MYSQL_CMD} -e "${SQL}" | grep -q "p${PARTITION_NAME}" ||
-        return 0
+    table_contains "$TABLE_NAME" "p${PARTITION_NAME}" || return 0
 
-    SQL="ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITION_NAME}"
-    if ${MYSQL_CMD} -e "${SQL}"; then
-        printf "table %-12s drop partitions p${PARTITION_NAME}\n" ${TABLE_NAME}
-    else
-        echo "..FAILED: ${SQL}"
-    fi
+    printf "table %-12s drop partition p${PARTITION_NAME}\n" ${TABLE_NAME}
+    MySQL "ALTER TABLE ${TABLE_NAME} DROP PARTITION p${PARTITION_NAME}"
 }
 
 function create_partitions_history() {
-    for PARTITIONS_CREATE_EVERY_DAY in $(date +"%Y%m%d") $(date +"%Y%m%d" --date='1 days') $(date +"%Y%m%d" --date='2 days') $(date +"%Y%m%d" --date='3 days')  $(date +"%Y%m%d" --date='4 days') $(date +"%Y%m%d" --date='5 days') $(date +"%Y%m%d" --date='6 days') $(date +"%Y%m%d" --date='7 days')
-    do
-        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_DAY} 23:59:59)" +%s) #"
-        for TABLE_NAME in ${HISTORY_TABLE}
-        do
-            SQL1=$(echo "show create table ${TABLE_NAME};")
-            RET1=$(${MYSQL_CMD} -e "${SQL1}"|grep "PARTITION BY RANGE"|wc -l)
-            if [ "${RET1}" == "0" ];then
-                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_DAY}  VALUES LESS THAN (${TIME_PARTITIONS}));") #"
-                RET2=$(${MYSQL_CMD} -e "${SQL2}")
-                if [ "${RET2}" != "" ];then
-                    echo  ${RET2}
-                    echo "${SQL2}"
-                else
-                    printf "table %-12s create partitions p${PARTITIONS_CREATE_EVERY_DAY}\n" ${TABLE_NAME}
-                fi
-                continue
-            fi
-            if [ "${RET1}" != "0" ];then
-                SQL3=$(echo "show create table ${TABLE_NAME};")
-                RET3=$(${MYSQL_CMD} -e "${SQL3}"|grep "p${PARTITIONS_CREATE_EVERY_DAY}"|wc -l)
-                if [ "${RET3}" == "0" ];then
-                    TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_DAY} 23:59:59)" +%s) 
-                    SQL4=$(echo "ALTER TABLE $TABLE_NAME  ADD PARTITION (PARTITION p${PARTITIONS_CREATE_EVERY_DAY} VALUES LESS THAN (${TIME_PARTITIONS}));")
-                    RET4=$(${MYSQL_CMD} -e "${SQL4}")
-                    if [ "${RET4}" != "" ];then
-                        echo  ${RET4}
-                        echo "${SQL4}"
-                    else
-                        printf "table %-12s create partitions p${PARTITIONS_CREATE_EVERY_DAY}\n" ${TABLE_NAME}
-                    fi
-                fi
-            fi
+    for DAY in 0 1 2 3 4 5 6 7; do
+        PART="$(date +"%Y%m%d" --date="$DAY days")"
+        TIME="$(date -d "${PART} 23:59:59" +%s)"
+        for TABLE in ${HISTORY_TABLE}; do
+            create_partition "$TABLE" "$PART" "$TIME"
         done
     done
 }
 
 function drop_partitions_history() {
-    for PARTITIONS_DELETE_DAYS_AGO in $(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago"); do
-        for TABLE_NAME in ${HISTORY_TABLE}; do
-            drop_partition "$TABLE_NAME" "$PARTITIONS_DELETE_DAYS_AGO"
-        done
+    for TABLE in ${HISTORY_TABLE}; do
+        drop_partition "$TABLE" "$(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")"
     done
 }
 
 function create_partitions_trend() {
-    for PARTITIONS_CREATE_EVERY_MONTHS in $(date +"%Y%m") $(date +"%Y%m" --date='1 months') $(date +"%Y%m" --date='2 months') $(date +"%Y%m" --date='3 months') $(date +"%Y%m" --date='4 months') $(date +"%Y%m" --date='5 months')
-    do
-        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_MONTHS}01 00:00:00)" +%s) #"
-        for TABLE_NAME in ${TREND_TABLE}
-        do
-            SQL1=$(echo "show create table ${TABLE_NAME};")
-            RET1=$(${MYSQL_CMD} -e "${SQL1}"|grep "PARTITION BY RANGE"|wc -l)
-            if [ "${RET1}" == "0" ];then
-                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS}  VALUES LESS THAN (${TIME_PARTITIONS}));") #"
-                RET2=$(${MYSQL_CMD} -e "${SQL2}")
-                if [ "${RET2}" != "" ];then
-                    echo  ${RET2}
-                    echo "${SQL2}"
-                else
-                    printf "table %-12s create partitions p${PARTITIONS_CREATE_EVERY_MONTHS}\n" ${TABLE_NAME}
-                fi
-                continue
-            fi
-            if [ "${RET1}" != "0" ];then
-                SQL3=$(echo "show create table ${TABLE_NAME};")
-                RET3=$(${MYSQL_CMD} -e "${SQL3}"|grep "p${PARTITIONS_CREATE_EVERY_MONTHS}"|wc -l)
-                if [ "${RET3}" == "0" ];then
-                    SQL4=$(echo "ALTER TABLE ${TABLE_NAME}  ADD PARTITION (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS} VALUES LESS THAN (${TIME_PARTITIONS}));") #"
-                    RET4=$(${MYSQL_CMD} -e "${SQL4}")
-                    if [ "${RET4}" != "" ];then
-                        echo  ${RET4}
-                        echo "${SQL4}"
-                    else
-                        printf "table %-12s create partitions p${PARTITIONS_CREATE_EVERY_MONTHS}\n" ${TABLE_NAME}
-                    fi
-                fi
-            fi
+    for MONTH in 0 1 2 3 4 5; do
+        PART="$(date +"%Y%m" --date="$MONTH months")"
+        TIME="$(date -d "${PART}01 00:00:00" +%s)"
+        for TABLE in ${TREND_TABLE}; do
+            create_partition "$TABLE" "$PART" "$TIME"
         done
     done
 }
 
 function drop_partitions_trend() {
-    for PARTITIONS_DELETE_MONTHS_AGO in $(date +"%Y%m" --date="${TREND_MONTHS} months ago"); do
-        for TABLE_NAME in ${TREND_TABLE}; do
-            drop_partition "$TABLE_NAME" "$PARTITIONS_DELETE_MONTHS_AGO"
-        done
+    for TABLE in ${TREND_TABLE}; do
+        drop_partition "$TABLE" "$(date +"%Y%m" --date="${TREND_MONTHS} months ago")"
     done
 }
 
@@ -136,4 +98,4 @@ function main() {
     drop_partitions_trend
 }
 
-main
+#main
