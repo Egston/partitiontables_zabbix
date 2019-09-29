@@ -1,10 +1,11 @@
 #!/bin/bash
-# author: itnihao
-# mail: itnihao#qq.com
-# Apache License Version 2.0
-# date: 2018-06-06
-# funtion: create parition for zabbix MySQL 
-# repo: https://github.com/zabbix-book/partitiontables_zabbix
+
+# Create/update partitioning for Zabbix MySQL 
+# Based on https://github.com/zabbix-book/partitiontables_zabbix by itnihao#qq.com
+# (Re)Written by ilya.evseev@gmail at Sep-2019
+# Distributed under terms of Apache License Version 2.0
+# Should be called daily from /etc/cron.d/xx like following:
+# 1 0 * * * root bash /path/to/partitiontables_zabbix.sh
 
 ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
 
