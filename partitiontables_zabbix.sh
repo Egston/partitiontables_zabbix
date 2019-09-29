@@ -19,20 +19,23 @@ function GetConf() {
     echo "${RESULT:-$2}"
 }
 
+function MySQL_base() {
+    mysql -u"$(GetConf DBUser zabbix)" \
+          -p"$(GetConf DBPassword)" \
+          -P"$(GetConf DBPort 3306)" \
+          -h"$(GetConf DBHost 127.0.0.1)" \
+            "$(GetConf DBName zabbix)" \
+          -e "$@"
+}
+
 function MySQL() {
     echo "EXEC: $@" 1>&2
-    mysql \
-        -u"$(GetConf DBUser zabbix)" \
-        -p"$(GetConf DBPassword)" \
-        -P"$(GetConf DBPort 3306)" \
-        -h"$(GetConf DBHost 127.0.0.1)" \
-          "$(GetConf DBName zabbix)" \
-        -e "$@"
+    MySQL_base "$@"
 }
 
 function table_contains() {
     local TABLE="$1" MASK="$2"
-    MySQL "show create table $TABLE" | grep -q "$MASK"
+    MySQL_base "show create table $TABLE" | grep -q "$MASK"
 }
 
 function create_partition() {
@@ -63,12 +66,6 @@ function create_partitions_history() {
     done
 }
 
-function drop_partitions_history() {
-    for TABLE in ${HISTORY_TABLE}; do
-        drop_partition "$TABLE" "$(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")"
-    done
-}
-
 function create_partitions_trend() {
     for MONTH in 0 1 2 3 4 5; do
         PART="$(date +"%Y%m" --date="$MONTH months")"
@@ -79,17 +76,11 @@ function create_partitions_trend() {
     done
 }
 
-function drop_partitions_trend() {
-    for TABLE in ${TREND_TABLE}; do
-        drop_partition "$TABLE" "$(date +"%Y%m" --date="${TREND_MONTHS} months ago")"
-    done
-}
+create_partitions_history
+create_partitions_trend
 
-function main() {
-    create_partitions_history
-    create_partitions_trend
-    drop_partitions_history
-    drop_partitions_trend
-}
+# Drop partitions:
+for TABLE in ${HISTORY_TABLE}; do drop_partition "$TABLE" "$(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")"  ; done
+for TABLE in ${TREND_TABLE}  ; do drop_partition "$TABLE" "$(date +"%Y%m"   --date="${TREND_MONTHS} months ago")"; done
 
-main
+## END ##
