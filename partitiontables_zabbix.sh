@@ -7,11 +7,12 @@
 # repo: https://github.com/zabbix-book/partitiontables_zabbix
 
 #配置环境变量
-ZABBIX_USER="zabbix"
-ZABBIX_PWD="zabbix"
-ZABBIX_DB="zabbix"
-ZABBIX_PORT="3306"
-ZABBIX_HOST="127.0.0.1"
+ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
+ZABBIX_USER="$(awk -F= '$1 == "DBUser"     { print $2; exit }' "$ZABBIX_CONF")"
+ ZABBIX_PWD="$(awk -F= '$1 == "DBPassword" { print $2; exit }' "$ZABBIX_CONF")"
+  ZABBIX_DB="$(awk -F= '$1 == "DBName"     { print $2; exit }' "$ZABBIX_CONF")"
+ZABBIX_PORT="$(awk -F= '$1 == "DBPort"     { print $2; exit }' "$ZABBIX_CONF")"
+ZABBIX_HOST="$(awk -F= '$1 == "DBHost"     { print $2; exit }' "$ZABBIX_CONF")"
 MYSQL_BIN="mysql"
 
 #历史数据保留时间，单位天
@@ -24,7 +25,7 @@ HISTORY_TABLE="history history_log history_str history_text history_uint"
 TREND_TABLE="trends trends_uint"
 
 #MYSQL连接命令
-MYSQL_CMD=$(echo ${MYSQL_BIN} -u${ZABBIX_USER} -p${ZABBIX_PWD} -P${ZABBIX_PORT} -h${ZABBIX_HOST} ${ZABBIX_DB})
+MYSQL_CMD=$(echo ${MYSQL_BIN} -u${ZABBIX_USER:-zabbix} -p${ZABBIX_PWD} -P${ZABBIX_PORT:-3306} -h${ZABBIX_HOST:-127.0.0.1} ${ZABBIX_DB:-zabbix})
 
 function create_partitions_history() {
     #给历史表创建分区
