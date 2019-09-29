@@ -26,13 +26,13 @@ MYSQL_CMD=$(echo ${MYSQL_BIN} -u${ZABBIX_USER:-zabbix} -p${ZABBIX_PWD} -P${ZABBI
 function create_partitions_history() {
     for PARTITIONS_CREATE_EVERY_DAY in $(date +"%Y%m%d") $(date +"%Y%m%d" --date='1 days') $(date +"%Y%m%d" --date='2 days') $(date +"%Y%m%d" --date='3 days')  $(date +"%Y%m%d" --date='4 days') $(date +"%Y%m%d" --date='5 days') $(date +"%Y%m%d" --date='6 days') $(date +"%Y%m%d" --date='7 days')
     do
-        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_DAY} 23:59:59)" +%s)
+        TIME_PARTITIONS=$(date -d "$(echo ${PARTITIONS_CREATE_EVERY_DAY} 23:59:59)" +%s) #"
         for TABLE_NAME in ${HISTORY_TABLE}
         do
             SQL1=$(echo "show create table ${TABLE_NAME};")
             RET1=$(${MYSQL_CMD} -e "${SQL1}"|grep "PARTITION BY RANGE"|wc -l)
             if [ "${RET1}" == "0" ];then
-                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_DAY}  VALUES LESS THAN (${TIME_PARTITIONS}));")
+                SQL2=$(echo "ALTER TABLE $TABLE_NAME PARTITION BY RANGE( clock ) (PARTITION p${PARTITIONS_CREATE_EVERY_DAY}  VALUES LESS THAN (${TIME_PARTITIONS}));") #"
                 RET2=$(${MYSQL_CMD} -e "${SQL2}")
                 if [ "${RET2}" != "" ];then
                     echo  ${RET2}
@@ -105,7 +105,7 @@ function create_partitions_trend() {
                 SQL3=$(echo "show create table ${TABLE_NAME};")
                 RET3=$(${MYSQL_CMD} -e "${SQL3}"|grep "p${PARTITIONS_CREATE_EVERY_MONTHS}"|wc -l)
                 if [ "${RET3}" == "0" ];then
-                    SQL4=$(echo "ALTER TABLE ${TABLE_NAME}  ADD PARTITION (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS} VALUES LESS THAN (${TIME_PARTITIONS}));")
+                    SQL4=$(echo "ALTER TABLE ${TABLE_NAME}  ADD PARTITION (PARTITION p${PARTITIONS_CREATE_EVERY_MONTHS} VALUES LESS THAN (${TIME_PARTITIONS}));") #"
                     RET4=$(${MYSQL_CMD} -e "${SQL4}")
                     if [ "${RET4}" != "" ];then
                         echo  ${RET4}
