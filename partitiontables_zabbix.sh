@@ -16,17 +16,19 @@ HISTORY_TABLE="history history_log history_str history_text history_uint"
 TREND_TABLE="trends trends_uint"
 
 function GetConf() {
-    local RESULT="$(awk -F= '$1 == "'"$1"'" { print $2; exit }' "$ZABBIX_CONF")"
-    echo "${RESULT:-$2}"
+    local CONFIG_VAR="$1" DEFAULT_VALUE="$2"
+    local RESULT="$(awk -F= '$1 == "'"$CONFIG_VAR"'" { print $2; exit }' "$ZABBIX_CONF")"
+    echo "${RESULT:-$DEFAULT_VALUE}"
 }
 
+DBHOST="$(GetConf DBHost 127.0.0.1)"
+DBPORT="$(GetConf DBPort 3306)"
+DBUSER="$(GetConf DBUser zabbix)"
+DBPASS="$(GetConf DBPassword)"
+DBNAME="$(GetConf DBName zabbix)"
+
 function MySQL_base() {
-    mysql -u"$(GetConf DBUser zabbix)" \
-          -p"$(GetConf DBPassword)" \
-          -P"$(GetConf DBPort 3306)" \
-          -h"$(GetConf DBHost 127.0.0.1)" \
-            "$(GetConf DBName zabbix)" \
-          -e "$@"
+    mysql -h"$DBHOST" -P"$DBPORT" -u"$DBUSER" -p"$DBPASS" "$DBNAME" -e "$@"
 }
 
 function MySQL() {
