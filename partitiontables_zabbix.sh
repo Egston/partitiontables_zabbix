@@ -5,7 +5,7 @@
 # (Re)Written by ilya.evseev@gmail at Sep-2019
 # Distributed under terms of Apache License Version 2.0
 # Should be called daily from /etc/cron.d/xx like following:
-# 1 0 * * * root bash /path/to/partitiontables_zabbix.sh
+# 1 0 * * * zabbix bash /path/to/partitiontables_zabbix.sh
 
 ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
 
