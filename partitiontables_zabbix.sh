@@ -28,7 +28,9 @@ DBPASS="$(GetConf DBPassword)"
 DBNAME="$(GetConf DBName zabbix)"
 
 declare -i simulate=0
+declare -i init=0
 echo $* | grep -qw -- --simulate && simulate=1
+echo $* | grep -qw -- init && init=1
 function MySQL_base() {
     mysql -h"$DBHOST" -P"$DBPORT" -u"$DBUSER" -p"$DBPASS" "$DBNAME" -e "$@"
 }
@@ -73,6 +75,21 @@ function create_partitions_history() {
     done
 }
 
+function create_all_partitions_history() {
+    for TABLE in ${HISTORY_TABLE}; do
+        PART_SQL=
+        for DAY in $(seq -$HISTORY_DAYS 7); do
+            PART="$(date +"%Y%m%d" --date="$DAY days")"
+            TIME="$(date -d "${PART} 23:59:59" +%s)"
+            if [ -n "$PART_SQL" ]; then
+                PART_SQL="$PART_SQL,"
+            fi
+            PART_SQL="$PART_SQL PARTITION p${PART} VALUES LESS THAN (${TIME})"
+        done
+        MySQL "ALTER TABLE $TABLE PARTITION BY RANGE( clock ) ($PART_SQL)"
+    done
+}
+
 function create_partitions_trend() {
     for MONTH in 0 1 2 3 4 5; do
         PART="$(date +"%Y%m" --date="$MONTH months")"
@@ -83,8 +100,28 @@ function create_partitions_trend() {
     done
 }
 
-create_partitions_history
-create_partitions_trend
+function create_all_partitions_trend() {
+    for TABLE in ${TREND_TABLE}; do
+        PART_SQL=
+        for MONTH in $(seq -$TREND_MONTHS 5); do
+            PART="$(date +"%Y%m" --date="$MONTH months")"
+            TIME="$(date -d "${PART}01 00:00:00" +%s)"
+            if [ -n "$PART_SQL" ]; then
+                PART_SQL="$PART_SQL,"
+            fi
+            PART_SQL="$PART_SQL PARTITION p${PART} VALUES LESS THAN (${TIME})"
+        done
+        MySQL "ALTER TABLE $TABLE PARTITION BY RANGE( clock ) ($PART_SQL)"
+    done
+}
+
+if ((init)); then
+    create_all_partitions_history
+    create_all_partitions_trend
+else
+    create_partitions_history
+    create_partitions_trend
+fi
 
 # Drop partitions:
 for TABLE in ${HISTORY_TABLE}; do drop_partition "$TABLE" "$(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")"  ; done
