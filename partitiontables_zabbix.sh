@@ -9,8 +9,8 @@
 
 ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
 
-HISTORY_DAYS=30
-TREND_MONTHS=12
+HISTORY_DAYS=${HISTORY_DAYS:-30}
+TREND_MONTHS=${TREND_MONTHS:-12}
 
 HISTORY_TABLE="history history_log history_str history_text history_uint"
 TREND_TABLE="trends trends_uint"
