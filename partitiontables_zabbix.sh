@@ -27,13 +27,17 @@ DBUSER="$(GetConf DBUser zabbix)"
 DBPASS="$(GetConf DBPassword)"
 DBNAME="$(GetConf DBName zabbix)"
 
+declare -i simulate=0
+echo $* | grep -qw -- --simulate && simulate=1
 function MySQL_base() {
     mysql -h"$DBHOST" -P"$DBPORT" -u"$DBUSER" -p"$DBPASS" "$DBNAME" -e "$@"
 }
 
 function MySQL() {
     echo "EXEC: $@" 1>&2
-    MySQL_base "$@"
+    if ((!simulate)); then
+        MySQL_base "$@"
+    fi
 }
 
 function table_contains() {
