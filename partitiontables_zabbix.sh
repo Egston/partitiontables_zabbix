@@ -15,6 +15,24 @@ TREND_MONTHS=${TREND_MONTHS:-12}
 HISTORY_TABLE="history history_log history_str history_text history_uint"
 TREND_TABLE="trends trends_uint"
 
+function help() {
+    cat <<- EOT
+	Usage: $(basename $0) [--simulate] [init]
+
+	  init	       create partitions for the whole storage period; this may
+	                 be time consuming
+	  --simulate   print SQL statements but do not execute them
+	  --help|help  display this help and exit
+
+	You can set following environmental variables in order to change the
+	default	storage period:
+
+	  HISTORY_DAYS - number of days of history to keep (defaults to 30)
+	  TREND_MONTHS - number of months of trends to keep (defaults to 12)
+
+	EOT
+}
+
 function GetConf() {
     local CONFIG_VAR="$1" DEFAULT_VALUE="$2"
     local RESULT="$(awk -F= '$1 == "'"$CONFIG_VAR"'" { print $2; exit }' "$ZABBIX_CONF")"
@@ -31,6 +49,8 @@ declare -i simulate=0
 declare -i init=0
 echo $* | grep -qw -- --simulate && simulate=1
 echo $* | grep -qw -- init && init=1
+echo $* | grep -qw -- help && { help; exit; }
+
 function MySQL_base() {
     mysql -h"$DBHOST" -P"$DBPORT" -u"$DBUSER" -p"$DBPASS" "$DBNAME" -e "$@"
 }
