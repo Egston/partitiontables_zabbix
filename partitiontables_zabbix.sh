@@ -147,4 +147,4 @@ fi
 for TABLE in ${HISTORY_TABLE}; do drop_partition "$TABLE" "$(date +"%Y%m%d" --date="${HISTORY_DAYS} days ago")"  ; done
 for TABLE in ${TREND_TABLE}  ; do drop_partition "$TABLE" "$(date +"%Y%m"   --date="${TREND_MONTHS} months ago")"; done
 
-## END ##
+exit 0
