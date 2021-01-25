@@ -7,6 +7,8 @@
 # Should be called daily from /etc/cron.d/xx like following:
 # 1 0 * * * zabbix bash /path/to/partitiontables_zabbix.sh
 
+set -e
+
 ZABBIX_CONF="/etc/zabbix/zabbix_server.conf"
 
 HISTORY_DAYS=${HISTORY_DAYS:-30}
@@ -47,9 +49,9 @@ DBNAME="$(GetConf DBName zabbix)"
 
 declare -i simulate=0
 declare -i init=0
-echo $* | grep -qw -- --simulate && simulate=1
-echo $* | grep -qw -- init && init=1
-echo $* | grep -qw -- help && { help; exit; }
+echo $* | grep -qw -- --simulate && simulate=1 || true
+echo $* | grep -qw -- init && init=1 || true
+echo $* | grep -qw -- help && { help; exit; } || true
 
 function MySQL_base() {
     mysql -h"$DBHOST" -P"$DBPORT" -u"$DBUSER" -p"$DBPASS" "$DBNAME" -e "$@"
@@ -72,7 +74,7 @@ function create_partition() {
 
     if table_contains "$TABLE" "PARTITION BY RANGE"
     then
-        table_contains "$TABLE" "p${PART}" && return
+        table_contains "$TABLE" "p${PART}" && return || true
         MySQL "ALTER TABLE $TABLE ADD PARTITION (PARTITION p${PART} VALUES LESS THAN (${TIME}))"
     else
         MySQL "ALTER TABLE $TABLE PARTITION BY RANGE( clock ) (PARTITION p${PART}  VALUES LESS THAN (${TIME}))"
@@ -81,7 +83,7 @@ function create_partition() {
 
 function drop_partition() {
     local TABLE="$1" PART="$2"
-    table_contains "$TABLE" "p${PART}" || return
+    table_contains "$TABLE" "p${PART}" || return 0
     MySQL "ALTER TABLE ${TABLE} DROP PARTITION p${PART}"
 }
 
